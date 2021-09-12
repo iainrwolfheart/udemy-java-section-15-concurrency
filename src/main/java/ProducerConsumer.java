@@ -39,8 +39,11 @@ class MyProducer implements Runnable {
             try {
                 System.out.println(colour + "Adding..." + num);
                 bufferLock.lock();
-                buffer.add(num);
-                bufferLock.unlock();
+                try {
+                    buffer.add(num);
+                } finally {
+                    bufferLock.unlock();
+                }
                 Thread.sleep(random.nextInt(1000));
             } catch (InterruptedException ie) {
                 System.out.println("Producer was interrupted");
@@ -48,8 +51,11 @@ class MyProducer implements Runnable {
         }
         System.out.println(colour + "Adding EOF and exiting...");
         bufferLock.lock();
-        buffer.add("EOF");
-        bufferLock.unlock();
+        try {
+            buffer.add("EOF");
+        } finally {
+            bufferLock.unlock();
+        }
     }
 }
 
@@ -69,20 +75,29 @@ class MyConsumer implements Runnable {
 
     @Override
     public void run() {
+        int counter = 0;
+
         while(true) {
-            bufferLock.lock();
-            if(buffer.isEmpty()) {
-                bufferLock.unlock();
-                continue;
-            }
-            if (buffer.get(0).equals(ProducerConsumer.eof)) {
-                System.out.println(colour + "Exiting");
-                bufferLock.unlock();
-                break;
+            if (bufferLock.tryLock()) {
+                try {
+                    if(buffer.isEmpty()) {
+                        continue;
+                    }
+                    System.out.println(colour + "The counter = " + counter);
+                    counter = 0;
+
+                    if (buffer.get(0).equals(ProducerConsumer.eof)) {
+                        System.out.println(colour + "Exiting");
+                        break;
+                    } else {
+                        System.out.println(colour + "Removed " + buffer.remove(0));
+                    }
+                } finally {
+                    bufferLock.unlock();
+                }
             } else {
-                System.out.println(colour + "Removed " + buffer.remove(0));
+                counter++;
             }
-            bufferLock.unlock();
         }
     }
 }
